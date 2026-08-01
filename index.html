@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+<title>Bloom — one tap, endless chains</title>
+<meta name="description" content="Bloom is a mesmerizing one-tap chain-reaction game. Drop a pulse, catch a drifting orb, and watch it bloom into a cascade. Four orb colors, each with its own chain. Free, endless, endlessly addictive." />
+<meta name="theme-color" content="#05030d" />
+<meta property="og:title" content="Bloom — one tap, endless chains" />
+<meta property="og:description" content="One tap sets off a cascade of light. Four orb colors, each with a different chain. Free and endlessly addictive." />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%2305030d'/%3E%3Ccircle cx='50' cy='50' r='30' fill='none' stroke='%2359f0ff' stroke-width='5'/%3E%3Ccircle cx='50' cy='50' r='9' fill='%23ff4dd2'/%3E%3C/svg%3E" />
+<style>
+  :root{
+    --bg:#05030d; --ink:#f2eeff; --muted:#8b86b8;
+    --cyan:#3ff0ff; --magenta:#ff4dd2; --gold:#ffd24d; --green:#5cff9d;
+    --panel:#120c26; --line:#251a44;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; height:100%; background:var(--bg); color:var(--ink);
+    overflow:hidden; user-select:none; touch-action:none;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,system-ui,sans-serif}
+  canvas{position:fixed; inset:0; width:100%; height:100%; display:block}
+
+  .hud{position:fixed; top:0; left:0; right:0; padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
+    display:flex; align-items:center; gap:12px; pointer-events:none; z-index:5}
+  .hud .stat{background:rgba(18,12,38,.55); border:1px solid var(--line); border-radius:14px;
+    padding:7px 14px; backdrop-filter:blur(8px)}
+  .hud .stat small{display:block; color:var(--muted); font-size:.6rem; letter-spacing:1.5px; text-transform:uppercase}
+  .hud .stat b{font-size:1.25rem; font-variant-numeric:tabular-nums}
+  .grow{flex:1}
+  .iconbtn{pointer-events:auto; border:0; cursor:pointer; background:rgba(18,12,38,.55); border:1px solid var(--line);
+    color:var(--ink); width:42px; height:42px; border-radius:12px; font-size:1.1rem; display:grid; place-items:center; backdrop-filter:blur(8px)}
+  .iconbtn:active{transform:translateY(1px)}
+
+  .combo{position:fixed; left:50%; top:24%; transform:translateX(-50%) scale(.5); opacity:0;
+    font-weight:900; font-size:3rem; pointer-events:none; z-index:4; text-shadow:0 4px 30px rgba(0,0,0,.6)}
+  .combo.show{animation:comboPop .6s ease}
+  @keyframes comboPop{0%{opacity:0;transform:translateX(-50%) scale(.4)}30%{opacity:1;transform:translateX(-50%) scale(1.1)}100%{opacity:0;transform:translateX(-50%) scale(1)}}
+
+  .energy{position:fixed; left:50%; bottom:calc(20px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+    width:min(70%,320px); height:10px; background:rgba(18,12,38,.6); border:1px solid var(--line); border-radius:99px; overflow:hidden; z-index:5; pointer-events:none}
+  .energy > i{display:block; height:100%; width:100%; background:linear-gradient(90deg,var(--cyan),var(--magenta)); transition:width .1s linear}
+  .energy.hidden{display:none}
+
+  .overlay{position:fixed; inset:0; background:rgba(5,3,13,.72); backdrop-filter:blur(10px);
+    display:none; align-items:center; justify-content:center; padding:22px; z-index:20}
+  .overlay.show{display:flex; animation:fade .3s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:26px; padding:26px 24px;
+    max-width:420px; width:100%; text-align:center; box-shadow:0 30px 90px rgba(0,0,0,.6); max-height:92vh; overflow:auto}
+  .card h1{margin:.1em 0; font-size:2.4rem; font-weight:900;
+    background:linear-gradient(90deg,var(--cyan),var(--magenta),var(--gold)); -webkit-background-clip:text; background-clip:text; color:transparent}
+  .card h2{margin:.2em 0 .3em; font-size:1.6rem}
+  .card p{color:var(--muted); line-height:1.55; margin:.4em 0 1.1em}
+  .btn{border:0; cursor:pointer; font-weight:800; color:#05030d; font-size:1.05rem; padding:14px 20px; border-radius:16px; width:100%;
+    background:linear-gradient(180deg,#6ff6ff,#3fd0ff); box-shadow:0 6px 0 #1a86a8; margin-top:8px}
+  .btn:active{transform:translateY(3px); box-shadow:0 3px 0 #1a86a8}
+  .btn.ghost{background:var(--panel); border:1px solid var(--line); color:var(--ink); box-shadow:0 6px 0 #0a0618}
+  .btn.ghost:active{box-shadow:0 3px 0 #0a0618}
+  .modes{display:flex; gap:10px; margin:16px 0}
+  .mode{flex:1; cursor:pointer; border:2px solid var(--line); background:#0d0820; border-radius:16px; padding:14px 8px}
+  .mode.on{border-color:var(--cyan)}
+  .mode .em{font-size:1.5rem}
+  .mode b{display:block; margin-top:4px; font-size:.95rem}
+  .mode small{color:var(--muted); font-size:.7rem}
+  .legend{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:14px 0 6px; text-align:left}
+  .lg{display:flex; gap:10px; align-items:center; background:#0d0820; border:1px solid var(--line); border-radius:12px; padding:9px 11px}
+  .dot{width:22px; height:22px; border-radius:50%; flex:none; box-shadow:0 0 14px currentColor}
+  .lg b{display:block; font-size:.85rem}
+  .lg small{color:var(--muted); font-size:.7rem; line-height:1.3; display:block}
+  .big{font-size:3.4rem; margin:.1em 0; font-weight:900}
+  .sub{color:var(--muted); font-size:.85rem}
+  .toast{position:fixed; left:50%; bottom:70px; transform:translateX(-50%) translateY(14px); opacity:0;
+    background:var(--panel); border:1px solid var(--line); padding:10px 18px; border-radius:12px; font-size:.9rem; z-index:30; transition:.25s}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud" id="hud" style="display:none">
+  <div class="stat"><small id="lblA">Score</small><b id="score">0</b></div>
+  <div class="stat"><small id="lblB">Wave</small><b id="wave">1</b></div>
+  <div class="grow"></div>
+  <div class="stat"><small>Best</small><b id="best">0</b></div>
+  <button class="iconbtn" id="soundBtn" title="Sound">🔊</button>
+  <button class="iconbtn" id="pauseBtn" title="Menu">☰</button>
+</div>
+
+<div class="combo" id="combo"></div>
+<div class="energy hidden" id="energy"><i id="energyFill"></i></div>
+
+<!-- Start / How to play -->
+<div class="overlay show" id="startOverlay">
+  <div class="card">
+    <h1>Bloom</h1>
+    <p>One tap sets off a cascade of light.</p>
+
+    <div class="legend">
+      <div class="lg"><span class="dot" style="background:var(--cyan);color:var(--cyan)"></span><div><b>Cyan</b><small>A steady bloom</small></div></div>
+      <div class="lg"><span class="dot" style="background:var(--magenta);color:var(--magenta)"></span><div><b>Magenta</b><small>Bursts extra wide</small></div></div>
+      <div class="lg"><span class="dot" style="background:var(--gold);color:var(--gold)"></span><div><b>Gold</b><small>Lingers longer</small></div></div>
+      <div class="lg"><span class="dot" style="background:var(--green);color:var(--green)"></span><div><b>Green</b><small>Splits in two</small></div></div>
+      <div class="lg"><span class="dot" style="background:#ff7a1a;color:#ff7a1a"></span><div><b>Bomb</b><small>Huge blast · rare</small></div></div>
+      <div class="lg"><span class="dot" style="background:#b06bff;color:#b06bff"></span><div><b>Void</b><small>Pulls orbs in · rare</small></div></div>
+    </div>
+
+    <p style="margin:14px 0 6px"><b style="color:var(--ink)">How to play:</b> tap anywhere to drop a pulse.
+      Any drifting orb it touches <b style="color:var(--ink)">blooms</b> into its own ring — which catches
+      more orbs, chaining across the screen. Longer chains score way more. Each color chains differently.</p>
+
+    <div class="modes" id="modeList">
+      <div class="mode on" data-mode="waves"><div class="em">🌊</div><b>Waves</b><small>Hit the target, or bust</small></div>
+      <div class="mode" data-mode="endless"><div class="em">♾️</div><b>Endless</b><small>Recharge & chase a score</small></div>
+      <div class="mode" data-mode="zen"><div class="em">🧘</div><b>Zen</b><small>No pressure, just bloom</small></div>
+    </div>
+
+    <button class="btn" id="playBtn">Play</button>
+  </div>
+</div>
+
+<!-- Wave cleared -->
+<div class="overlay" id="waveOverlay">
+  <div class="card">
+    <h2 id="waveTitle">Wave clear! ✦</h2>
+    <p id="waveMsg">Nice cascade.</p>
+    <button class="btn" id="nextBtn">Next wave →</button>
+  </div>
+</div>
+
+<!-- Game over -->
+<div class="overlay" id="overOverlay">
+  <div class="card">
+    <div class="big" id="overScore">0</div>
+    <div class="sub" id="overSub">Final score</div>
+    <p id="overMsg" style="margin-top:14px">So close. One more?</p>
+    <button class="btn" id="retryBtn">Play again</button>
+    <button class="btn ghost" id="shareBtn" style="margin-top:10px">📸 Share my score</button>
+    <button class="btn ghost" id="menuBtn" style="margin-top:10px">Menu</button>
+  </div>
+</div>
+
+<!-- Pause -->
+<div class="overlay" id="pauseOverlay">
+  <div class="card">
+    <h2>Paused</h2>
+    <p>Take a breath. The light will wait.</p>
+    <button class="btn" id="resumeBtn">Resume</button>
+    <button class="btn ghost" id="quitBtn" style="margin-top:10px">Quit to menu</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+  const cv = document.getElementById("c");
+  const ctx = cv.getContext("2d");
+  const $ = s => document.querySelector(s);
+  const LS_BEST = "bloom.best.";
+  const TAU = Math.PI*2;
+
+  const COLORS = {
+    cyan:   {css:"#3ff0ff", maxR:1.00, hold:0.32, split:false, tone:523},
+    magenta:{css:"#ff4dd2", maxR:1.55, hold:0.28, split:false, tone:659},
+    gold:   {css:"#ffd24d", maxR:1.10, hold:0.85, split:false, tone:784},
+    green:  {css:"#5cff9d", maxR:0.85, hold:0.30, split:true,  tone:988},
+    // specials (rarer, high-impact)
+    bomb:   {css:"#ff7a1a", maxR:2.30, hold:0.34, split:false, tone:392, blast:true},
+    void:   {css:"#b06bff", maxR:1.35, hold:0.60, split:false, tone:294, gravity:true},
+  };
+  const KEYS = Object.keys(COLORS);
+  const BASE = ["cyan","magenta","gold","green"];
+  const SPECIAL = ["bomb","void"];
+
+  let W=0,H=0,DPR=1,S=1; // S = scale unit based on min dimension
+  let mode="waves";
+  let orbs=[], blooms=[], particles=[], floaters=[];
+  let score=0, wave=1, combo=0, chainDepth=0, running=false, paused=false;
+  let chainResolving=false;
+  let chainClock=0, lastPopClock=0; // seconds; drive fast-forward + safety timeout
+  const MAX_DEPTH=30, MAX_BLOOMS=140, CHAIN_TIMEOUT=8; // safety caps
+  let bloomsLeft=0, target=0, popped=0, orbTotal=0;
+  let energy=1, energyRate=0.28; // endless recharge / sec
+  let best=0, shake=0, tPrev=0, spawnTimer=0;
+  let soundOn=true, actx=null;
+
+  // ---------- audio ----------
+  function initAudio(){ if(actx||!soundOn) return; try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  function blip(freq, when){
+    if(!soundOn||!actx) return;
+    const t=actx.currentTime + (when||0);
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type="sine"; o.frequency.setValueAtTime(freq,t);
+    o.frequency.exponentialRampToValueAtTime(freq*1.5, t+0.12);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.18,t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t+0.24);
+  }
+
+  // ---------- sizing ----------
+  function resize(){
+    DPR=Math.min(window.devicePixelRatio||1,2);
+    W=window.innerWidth; H=window.innerHeight;
+    cv.width=W*DPR; cv.height=H*DPR; ctx.setTransform(DPR,0,0,DPR,0,0);
+    S=Math.min(W,H);
+  }
+  window.addEventListener("resize", resize);
+
+  // ---------- helpers ----------
+  function rnd(a,b){ return a+Math.random()*(b-a); }
+  function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
+  function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("show"),1500); }
+
+  function makeOrb(x,y){
+    // specials get slightly more common as waves ramp; capped so they stay special
+    const specialChance = Math.min(0.06 + wave*0.015, 0.18);
+    const key = Math.random() < specialChance ? pick(SPECIAL) : pick(BASE);
+    const isSpecial = SPECIAL.includes(key);
+    const speed=rnd(0.02,0.06)*S* (mode==="zen"?0.6:1) * (isSpecial?0.75:1);
+    const ang=rnd(0,TAU);
+    return { x:x??rnd(0.1*W,0.9*W), y:y??rnd(0.14*H,0.9*H),
+      vx:Math.cos(ang)*speed, vy:Math.sin(ang)*speed,
+      r:S*(isSpecial?0.02:0.016), key, alive:true, born:performance.now() };
+  }
+
+  function spawnOrbs(n){ for(let i=0;i<n;i++) orbs.push(makeOrb()); }
+
+  function makeBloom(x,y,key,depth){
+    const c=COLORS[key];
+    return { x,y, key, r:0, maxR:S*0.14*c.maxR, t:0,
+      grow:0.34, hold:c.hold, shrink:0.30, phase:"grow", depth:depth||0, split:c.split, splitDone:false };
+  }
+
+  // ---------- game control ----------
+  function setMode(m){ mode=m; best=+(localStorage.getItem(LS_BEST+m)||0); }
+
+  function start(){
+    initAudio();
+    score=0; wave=1; combo=0; chainDepth=0; paused=false; running=true;
+    chainResolving=false; chainClock=0; lastPopClock=0;
+    orbs=[]; blooms=[]; particles=[]; floaters=[]; shake=0;
+    $("#hud").style.display="flex";
+    $("#lblA").textContent="Score"; $("#lblB").textContent = mode==="waves"?"Wave":"Combo";
+    $("#best").textContent=best;
+    if(mode==="waves") startWave();
+    else { // endless / zen
+      $("#energy").classList.toggle("hidden", mode==="zen");
+      energy=1; spawnOrbs(mode==="zen"?14:18);
+    }
+    syncHud();
+  }
+
+  function startWave(){
+    orbs=[]; blooms=[]; particles=[];
+    orbTotal = 6 + wave*2;
+    target = Math.min(orbTotal, Math.ceil(orbTotal * Math.min(0.35 + wave*0.05, 0.85)));
+    bloomsLeft = 1;
+    popped=0;
+    spawnOrbs(orbTotal);
+    $("#energy").classList.add("hidden");
+    syncHud();
+  }
+
+  function syncHud(){
+    $("#score").textContent=score;
+    if(mode==="waves"){ $("#wave").textContent=wave; $("#lblB").textContent="Wave"; }
+    else { $("#wave").textContent=combo>1?("x"+combo):"–"; $("#lblB").textContent="Combo"; }
+    if(mode==="endless") $("#energyFill").style.width=Math.max(0,energy*100)+"%";
+  }
+
+  function tap(px,py){
+    if(!running||paused) return;
+    initAudio();
+    if(mode==="waves"){
+      if(bloomsLeft<=0) return;
+      bloomsLeft--;
+    } else if(mode==="endless"){
+      if(energy<0.34){ toast("Recharging…"); return; }
+      energy-=0.34;
+    }
+    combo=0; chainDepth=0; chainResolving=true;
+    lastPopClock=chainClock; // start the fast-forward / timeout window fresh
+    // player pulse is a neutral white bloom that pops any color
+    blooms.push({ x:px, y:py, key:"cyan", r:0, maxR:S*0.16, t:0,
+      grow:0.30, hold:0.10, shrink:0.30, phase:"grow", depth:0, player:true, split:false, splitDone:false });
+    shake=Math.min(shake+2,6);
+  }
+
+  cv.addEventListener("pointerdown", e=>{ tap(e.clientX, e.clientY); });
+
+  // ---------- popping ----------
+  function popOrb(o, src){
+    o.alive=false;
+    const atDepth = src ? src.depth : 0;
+    if(src) src.caught = (src.caught||0)+1;
+    lastPopClock = chainClock; // reset fast-forward whenever something pops
+    combo++; chainDepth=Math.max(chainDepth,atDepth);
+    const gain = 10 * combo;
+    score += gain;
+    // spawn its bloom (respect the hard cap so runaway chains can't hang)
+    if(blooms.length < MAX_BLOOMS && atDepth+1 <= MAX_DEPTH){
+      const b=makeBloom(o.x,o.y,o.key,atDepth+1);
+      blooms.push(b);
+    }
+    // particles
+    const special = SPECIAL.includes(o.key);
+    if(special){
+      score += 40 * combo; // specials pay a bonus
+      burst(o.x,o.y,COLORS[o.key].css, 20+Math.min(combo,20));
+      shake=Math.min(shake+3,12);
+    } else {
+      burst(o.x,o.y,COLORS[o.key].css, 8+Math.min(combo,14));
+      shake=Math.min(shake+1.2,9);
+    }
+    floaters.push({x:o.x,y:o.y-S*0.02,txt:"+"+gain,css:COLORS[o.key].css,t:0,life:0.9});
+    blip(COLORS[o.key].tone*(1+Math.min(combo,12)*0.03));
+    if(mode==="endless") energy=Math.min(1,energy+ (special?0.10:0.04));
+  }
+
+  function burst(x,y,css,n){
+    for(let i=0;i<n;i++){ const a=rnd(0,TAU), sp=rnd(0.04,0.18)*S;
+      particles.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:rnd(0.4,0.8),t:0,css,r:rnd(1.5,3.5)}); }
+  }
+
+  // ---------- loop ----------
+  function frame(now){
+    const dt=Math.min((now-tPrev)/1000||0, 0.05); tPrev=now;
+    if(running && !paused) update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+
+  function update(dt){
+    chainClock += dt;
+    // Fast-forward the bloom lifecycle while a chain is resolving but nothing is
+    // being caught — keeps dead time snappy instead of waiting on slow shrinks.
+    let bdt = dt;
+    if(blooms.length>0 && (chainClock - lastPopClock) > 0.18){
+      const idle = chainClock - lastPopClock;
+      bdt = dt * Math.min(1 + idle*6, 7); // ramp up to 7x
+    }
+    // energy recharge
+    if(mode==="endless"){ energy=Math.min(1,energy+energyRate*dt); syncHud(); }
+    // orbs drift + bounce
+    for(const o of orbs){ if(!o.alive) continue;
+      o.x+=o.vx*dt; o.y+=o.vy*dt;
+      const m=o.r+2;
+      if(o.x<m){o.x=m;o.vx*=-1;} if(o.x>W-m){o.x=W-m;o.vx*=-1;}
+      if(o.y<m+8){o.y=m+8;o.vy*=-1;} if(o.y>H-m){o.y=H-m;o.vy*=-1;}
+    }
+    // blooms grow/hold/shrink; catch orbs while active
+    for(const b of blooms){
+      b.t+=bdt;
+      if(b.phase==="grow"){ b.r=b.maxR*(b.t/b.grow); if(b.t>=b.grow){b.phase="hold";b.t=0;b.r=b.maxR;} }
+      else if(b.phase==="hold"){ if(b.t>=b.hold){b.phase="shrink";b.t=0;} }
+      else if(b.phase==="shrink"){ b.r=b.maxR*(1-b.t/b.shrink); if(b.t>=b.shrink){b.dead=true;} }
+      // catch orbs when active (grow or hold)
+      if(b.phase!=="shrink"||b.r>0){
+        const grav = COLORS[b.key] && COLORS[b.key].gravity;
+        const pull = grav ? b.maxR*1.9 : 0; // void reaches beyond its ring
+        for(const o of orbs){ if(!o.alive) continue;
+          const dx=o.x-b.x, dy=o.y-b.y;
+          const d2 = dx*dx+dy*dy;
+          if(grav){
+            const d=Math.sqrt(d2)||1;
+            if(d < pull){ // suck orbs inward — creates dramatic void chains
+              const f = (1 - d/pull) * S*1.4 * dt;
+              o.vx -= (dx/d)*f; o.vy -= (dy/d)*f;
+            }
+          }
+          if(d2 <= (b.r+o.r)*(b.r+o.r)) popOrb(o, b);
+        }
+      }
+      // splitter: spawn ONE child, only after it has actually caught an orb, and
+      // only within the depth/count caps — this prevents runaway green loops.
+      if(b.split && !b.splitDone && b.phase==="hold" && (b.caught||0)>0
+         && b.depth < MAX_DEPTH && blooms.length < MAX_BLOOMS){
+        b.splitDone=true;
+        const off=S*0.05, a=rnd(0,TAU);
+        blooms.push(makeBloom(b.x+Math.cos(a)*off, b.y+Math.sin(a)*off, "green", b.depth+1));
+      }
+    }
+    blooms=blooms.filter(b=>!b.dead);
+
+    // particles + floaters
+    for(const p of particles){ p.t+=dt; p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.92; p.vy*=0.92; }
+    particles=particles.filter(p=>p.t<p.life);
+    for(const f of floaters){ f.t+=dt; f.y-=S*0.03*dt; }
+    floaters=floaters.filter(f=>f.t<f.life);
+
+    // endless spawn drip to keep board lively
+    if(mode!=="waves"){
+      spawnTimer-=dt;
+      const targetCount = mode==="zen"?16:20;
+      if(orbs.filter(o=>o.alive).length<targetCount && spawnTimer<=0){
+        orbs.push(makeOrb()); spawnTimer=0.5;
+      }
+    }
+
+    // Safety: if a chain somehow runs too long, force it to resolve.
+    if(chainResolving && (chainClock - lastPopClock) > CHAIN_TIMEOUT){
+      blooms.length = 0;
+    }
+    // combo/chain resolves when every bloom has faded after a pulse
+    if(blooms.length===0 && chainResolving){ chainResolving=false; endChain(); }
+
+    if(shake>0) shake=Math.max(0,shake-dt*22);
+
+    // cleanup dead orbs occasionally
+    if(orbs.length>400) orbs=orbs.filter(o=>o.alive);
+  }
+
+  function endChain(){
+    const c=combo;
+    if(c>=3){ showCombo(c); }
+    combo=0;
+    // bonus for big chains
+    if(c>=5){ const bonus=c*c*2; score+=bonus; floaters.push({x:W/2,y:H*0.35,txt:"CHAIN +"+bonus,css:"#ffd24d",t:0,life:1.2}); }
+    checkWaveEnd();
+    checkBest();
+    syncHud();
+  }
+
+  function showCombo(c){
+    const el=$("#combo"); el.textContent = c+" CHAIN!";
+    el.style.color = c>=8?"var(--gold)":c>=5?"var(--magenta)":"var(--cyan)";
+    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+  }
+
+  function checkWaveEnd(){
+    if(mode!=="waves") return;
+    popped = orbTotal - orbs.filter(o=>o.alive).length;
+    if(popped>=target){
+      running=false;
+      $("#waveTitle").textContent = popped===orbTotal ? "Perfect wave! ✦✦" : "Wave "+wave+" clear! ✦";
+      $("#waveMsg").textContent = `Popped ${popped} of ${orbTotal}. Score ${score}.`;
+      setTimeout(()=>$("#waveOverlay").classList.add("show"), 350);
+    } else if(bloomsLeft<=0){
+      // out of pulses and target not met
+      gameOver(`You popped ${popped} of ${target} needed.`);
+    }
+  }
+
+  function gameOver(msg){
+    running=false;
+    checkBest();
+    $("#overScore").textContent=score;
+    $("#overSub").textContent = "Final score · best "+best;
+    $("#overMsg").textContent = msg || "One more?";
+    setTimeout(()=>$("#overOverlay").classList.add("show"), 300);
+  }
+
+  function checkBest(){
+    if(score>best){ best=score; localStorage.setItem(LS_BEST+mode,best); $("#best").textContent=best; }
+  }
+
+  // ---------- render ----------
+  function render(){
+    ctx.clearRect(0,0,W,H);
+    // background vignette
+    const g=ctx.createRadialGradient(W/2,H*0.4,0,W/2,H*0.4,Math.max(W,H)*0.8);
+    g.addColorStop(0,"#0c0722"); g.addColorStop(1,"#05030d");
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    ctx.save();
+    if(shake>0) ctx.translate((Math.random()-0.5)*shake, (Math.random()-0.5)*shake);
+
+    // blooms (rings)
+    for(const b of blooms){
+      const c=COLORS[b.key]; const alpha=b.phase==="shrink"?0.5:0.85;
+      ctx.beginPath(); ctx.arc(b.x,b.y,Math.max(0,b.r),0,TAU);
+      ctx.strokeStyle=c.css; ctx.globalAlpha=alpha; ctx.lineWidth=Math.max(2,S*0.006);
+      ctx.shadowColor=c.css; ctx.shadowBlur=24; ctx.stroke();
+      // inner glow fill
+      ctx.globalAlpha=0.10; ctx.fillStyle=c.css; ctx.fill();
+      ctx.globalAlpha=1; ctx.shadowBlur=0;
+    }
+
+    // orbs
+    for(const o of orbs){ if(!o.alive) continue; const c=COLORS[o.key];
+      const pulse=1+0.12*Math.sin(performance.now()/300 + o.born);
+      const rr=o.r*pulse;
+      if(o.key==="bomb"){
+        // fiery core + rotating spikes
+        const rot=performance.now()/400 + o.born;
+        ctx.save(); ctx.translate(o.x,o.y); ctx.rotate(rot);
+        ctx.strokeStyle=c.css; ctx.lineWidth=Math.max(2,S*0.004); ctx.shadowColor=c.css; ctx.shadowBlur=18;
+        for(let k=0;k<8;k++){ ctx.rotate(TAU/8); ctx.beginPath(); ctx.moveTo(rr*1.1,0); ctx.lineTo(rr*1.7,0); ctx.stroke(); }
+        ctx.beginPath(); ctx.arc(0,0,rr,0,TAU); ctx.fillStyle=c.css; ctx.fill();
+        ctx.shadowBlur=0; ctx.restore();
+      } else if(o.key==="void"){
+        // dark core with a bright event-horizon ring + inward swirl
+        ctx.beginPath(); ctx.arc(o.x,o.y,rr*1.7,0,TAU);
+        ctx.strokeStyle=c.css; ctx.lineWidth=Math.max(2,S*0.005); ctx.shadowColor=c.css; ctx.shadowBlur=20; ctx.stroke();
+        ctx.beginPath(); ctx.arc(o.x,o.y,rr,0,TAU); ctx.fillStyle="#0a0416"; ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.globalAlpha=0.5; ctx.beginPath(); ctx.arc(o.x,o.y,rr*0.55,0,TAU); ctx.fillStyle=c.css; ctx.fill(); ctx.globalAlpha=1;
+      } else {
+        ctx.beginPath(); ctx.arc(o.x,o.y,rr,0,TAU);
+        ctx.fillStyle=c.css; ctx.shadowColor=c.css; ctx.shadowBlur=16; ctx.fill();
+        ctx.shadowBlur=0;
+        ctx.globalAlpha=0.35; ctx.beginPath(); ctx.arc(o.x-o.r*0.3,o.y-o.r*0.3,o.r*0.35,0,TAU);
+        ctx.fillStyle="#fff"; ctx.fill(); ctx.globalAlpha=1;
+      }
+    }
+
+    // particles
+    for(const p of particles){ const a=1-p.t/p.life;
+      ctx.globalAlpha=a; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,TAU); ctx.fillStyle=p.css; ctx.fill(); }
+    ctx.globalAlpha=1;
+
+    // floaters
+    ctx.textAlign="center"; ctx.font="800 "+Math.round(S*0.035)+"px system-ui,sans-serif";
+    for(const f of floaters){ const a=1-f.t/f.life; ctx.globalAlpha=a; ctx.fillStyle=f.css;
+      ctx.shadowColor=f.css; ctx.shadowBlur=12; ctx.fillText(f.txt,f.x,f.y); ctx.shadowBlur=0; }
+    ctx.globalAlpha=1;
+
+    ctx.restore();
+
+    // waves: show pulses left + target as a subtle top-center hint
+    if(running && !paused && mode==="waves"){
+      ctx.textAlign="center"; ctx.fillStyle="rgba(242,238,255,.75)";
+      ctx.font="700 "+Math.round(S*0.03)+"px system-ui,sans-serif";
+      const left = bloomsLeft>0 ? "Tap to bloom" : "";
+      ctx.fillText(`${popped}/${target} popped   ·   ${left}`, W/2, H-Math.max(46, 30+ (window.innerHeight*0)) );
+    }
+  }
+
+  // ---------- share ----------
+  const SHARE_URL = "https://rahulatrkm.github.io/bloom/";
+  function drawShareCard(){
+    const sc=document.createElement("canvas"); sc.width=1080; sc.height=1080;
+    const g=sc.getContext("2d");
+    const bg=g.createRadialGradient(540,430,0,540,430,900);
+    bg.addColorStop(0,"#140a2e"); bg.addColorStop(1,"#05030d");
+    g.fillStyle=bg; g.fillRect(0,0,1080,1080);
+    const ring=(x,y,r,col)=>{ g.beginPath(); g.arc(x,y,r,0,TAU); g.strokeStyle=col; g.lineWidth=8;
+      g.shadowColor=col; g.shadowBlur=40; g.globalAlpha=.9; g.stroke(); g.globalAlpha=1; g.shadowBlur=0; };
+    ring(250,250,120,"#3ff0ff"); ring(860,300,90,"#ff4dd2"); ring(820,820,140,"#ffd24d"); ring(230,830,80,"#5cff9d");
+    g.textAlign="center";
+    g.font="900 96px system-ui,sans-serif";
+    const grad=g.createLinearGradient(340,0,740,0);
+    grad.addColorStop(0,"#3ff0ff"); grad.addColorStop(.5,"#ff4dd2"); grad.addColorStop(1,"#ffd24d");
+    g.fillStyle=grad; g.fillText("Bloom", 540, 300);
+    g.fillStyle="#8b86b8"; g.font="600 34px system-ui,sans-serif";
+    g.fillText("one tap, endless chains", 540, 356);
+    g.fillStyle="#f2eeff"; g.font="900 220px system-ui,sans-serif";
+    g.shadowColor="#3ff0ff"; g.shadowBlur=30;
+    g.fillText(String(score), 540, 640); g.shadowBlur=0;
+    g.fillStyle="#8b86b8"; g.font="700 40px system-ui,sans-serif";
+    const modeName=mode==="waves"?("Waves · reached wave "+wave):mode==="endless"?"Endless":"Zen";
+    g.fillText(modeName.toUpperCase(), 540, 710);
+    g.fillStyle="#f2eeff"; g.font="700 42px system-ui,sans-serif";
+    g.fillText("Can you beat me?", 540, 940);
+    g.fillStyle="#8b86b8"; g.font="600 36px system-ui,sans-serif";
+    g.fillText(SHARE_URL.replace("https://",""), 540, 1000);
+    return sc;
+  }
+  async function shareScore(){
+    const text = `I scored ${score} in Bloom 🌸 (${mode}) — one tap, endless chains. Can you beat me?`;
+    const card = drawShareCard();
+    try{
+      const blob = await new Promise(res=>card.toBlob(res,"image/png"));
+      const file = new File([blob], "bloom-score.png", {type:"image/png"});
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], text, url:SHARE_URL}); return;
+      }
+      if(navigator.share){ await navigator.share({text, url:SHARE_URL}); return; }
+      const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="bloom-score.png"; a.click();
+      try{ await navigator.clipboard.writeText(text+" "+SHARE_URL); toast("Card saved · link copied"); }
+      catch(e){ toast("Score card saved"); }
+    }catch(err){
+      try{ await navigator.clipboard.writeText(text+" "+SHARE_URL); toast("Link copied to clipboard"); }
+      catch(e){ toast("Couldn't share"); }
+    }
+  }
+
+  // ---------- UI wiring ----------
+  $("#modeList").querySelectorAll(".mode").forEach(m=>{
+    m.onclick=()=>{ document.querySelectorAll(".mode").forEach(x=>x.classList.remove("on")); m.classList.add("on"); setMode(m.dataset.mode); };
+  });
+  $("#playBtn").onclick=()=>{ $("#startOverlay").classList.remove("show"); setMode(document.querySelector(".mode.on").dataset.mode); start(); };
+  $("#nextBtn").onclick=()=>{ $("#waveOverlay").classList.remove("show"); wave++; running=true; startWave(); };
+  $("#retryBtn").onclick=()=>{ $("#overOverlay").classList.remove("show"); start(); };
+  $("#shareBtn").onclick=shareScore;
+  $("#menuBtn").onclick=()=>{ $("#overOverlay").classList.remove("show"); $("#hud").style.display="none"; $("#startOverlay").classList.add("show"); };
+  $("#pauseBtn").onclick=()=>{ paused=true; $("#pauseOverlay").classList.add("show"); };
+  $("#resumeBtn").onclick=()=>{ paused=false; $("#pauseOverlay").classList.remove("show"); };
+  $("#quitBtn").onclick=()=>{ paused=false; running=false; $("#pauseOverlay").classList.remove("show"); $("#hud").style.display="none"; $("#startOverlay").classList.add("show"); };
+  $("#soundBtn").onclick=()=>{ soundOn=!soundOn; $("#soundBtn").textContent=soundOn?"🔊":"🔇"; if(soundOn) initAudio(); };
+
+  // keyboard: space to drop pulse at center-ish last pointer
+  let lastPt={x:0,y:0};
+  window.addEventListener("pointermove",e=>{ lastPt={x:e.clientX,y:e.clientY}; });
+  window.addEventListener("keydown",e=>{ if(e.code==="Space"){ e.preventDefault(); tap(lastPt.x||W/2,lastPt.y||H/2); }
+    if(e.key==="p"||e.key==="Escape"){ if(running){ paused=!paused; $("#pauseOverlay").classList.toggle("show",paused); } } });
+
+  // ---------- boot ----------
+  resize();
+  setMode("waves");
+  tPrev=performance.now();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
