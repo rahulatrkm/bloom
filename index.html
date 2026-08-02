@@ -275,7 +275,7 @@ function levelPlan(n){
   const reach  = clamp(rawR, 30, Math.min(W, H) * 0.17);
   // achievable catch-rate climbs steeply then plateaus, so the quota has to
   // be concave too; a straight line leaves the mid-game impossible to lose
-  const frac   = 0.28 + 0.44 * Math.sqrt(k / 24);        // L1 .28 -> L25 .72
+  const frac   = 0.28 + 0.528 * Math.sqrt(k / 24);       // L1 .28 -> L25 .81
   // level 1 is the first impression: a well-aimed tap must never fail it
   const need   = n === 1 ? 1 : Math.max(1, Math.min(Math.round(total * frac), total));
   return { total, need, reach };
