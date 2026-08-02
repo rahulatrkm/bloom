@@ -580,7 +580,9 @@ function toast(msg){
   clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("on"), 2100);
 }
 
-$("btnPlay").addEventListener("click", () => { actx(); S.score = 0; startLevel(1); });
+const dropFocus = () => { if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); };
+
+$("btnPlay").addEventListener("click", () => { actx(); S.score = 0; startLevel(1); dropFocus(); });
 $("btnHow").addEventListener("click", () => {
   toast("One tap. Each orb it catches blooms again — chain them.");
 });
@@ -588,6 +590,7 @@ $("btnNext").addEventListener("click", () => {
   actx();
   const won = S.caught >= S.need;
   startLevel(won ? S.level + 1 : S.level);
+  dropFocus();
 });
 $("btnShare").addEventListener("click", async () => {
   const txt = `Bloom — level ${S.level}, ${S.caught} orbs, chain ${S.bestChain}, ${S.score} pts\nhttps://rahulatrkm.github.io/bloom/`;
